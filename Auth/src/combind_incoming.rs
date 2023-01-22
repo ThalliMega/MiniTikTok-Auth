@@ -10,8 +10,8 @@ use futures_core::Stream;
 use tonic::transport::server::TcpIncoming;
 
 pub struct CombinedIncoming {
-    pub a: TcpIncoming,
-    pub b: TcpIncoming,
+    a: TcpIncoming,
+    b: TcpIncoming,
 }
 
 impl Stream for CombinedIncoming {
