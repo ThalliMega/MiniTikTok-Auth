@@ -1,6 +1,9 @@
 use std::{
+    error::Error,
+    net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use futures_core::Stream;
@@ -24,5 +27,14 @@ impl Stream for CombinedIncoming {
         }
 
         Poll::Pending
+    }
+}
+
+impl CombinedIncoming {
+    pub fn new(a: SocketAddr, b: SocketAddr) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            a: TcpIncoming::new(a, false, Some(Duration::from_secs(60 * 60 * 24 * 3)))?,
+            b: TcpIncoming::new(b, false, Some(Duration::from_secs(60 * 60 * 24 * 3)))?,
+        })
     }
 }

@@ -1,24 +1,28 @@
 mod combind_incoming;
 mod proto;
 
-use std::env;
-use std::net::{Ipv4Addr, Ipv6Addr};
-use std::pin::Pin;
-use std::time::Duration;
-
 use combind_incoming::CombinedIncoming;
-use log::warn;
-use proto::auth_response::AuthStatusCode;
-use proto::auth_service_server::{self, AuthServiceServer};
-use proto::{AuthRequest, AuthResponse, TokenRequest, TokenResponse};
-use redis::aio::MultiplexedConnection;
-use redis::{AsyncCommands, Expiry};
-use std::future::Future;
-use tonic::transport::{server::TcpIncoming, Server};
-use tonic::{Request, Response, Status};
+use log::error;
+use proto::{
+    auth_response::AuthStatusCode,
+    auth_service_server::{self, AuthServiceServer},
+    token_response::TokenStatusCode,
+    AuthRequest, AuthResponse, TokenRequest, TokenResponse,
+};
+use redis::{aio::MultiplexedConnection, AsyncCommands, Expiry};
+use std::{
+    env,
+    future::Future,
+    net::{Ipv4Addr, Ipv6Addr},
+    pin::Pin,
+    time::Duration,
+};
+use tokio_postgres::NoTls;
+use tonic::{transport::Server, Request, Response, Status};
 
 struct AuthService {
     redis_conn: MultiplexedConnection,
+    postgres_config: tokio_postgres::config::Config,
 }
 
 impl auth_service_server::AuthService for AuthService {
@@ -55,7 +59,7 @@ impl auth_service_server::AuthService for AuthService {
                     }
 
                     Err(e) => {
-                        warn!("{e}");
+                        error!("{e}");
                         return Err(Status::internal("Bad Database"));
                     }
                 },
@@ -71,12 +75,86 @@ impl auth_service_server::AuthService for AuthService {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
-        todo!()
+        let req = request.into_inner();
+        let username = req.username;
+        let password = req.password;
+
+        let fail_response = Ok(Response::new(TokenResponse {
+            status_code: TokenStatusCode::Fail.into(),
+            token: String::new(),
+        }));
+
+        let bad_database = Err(Status::internal("Bad Database"));
+
+        Box::pin(async move {
+            let (client, conn) = match self.postgres_config.connect(NoTls).await {
+                Ok(val) => val,
+                Err(e) => {
+                    error!("{e}");
+                    return bad_database;
+                }
+            };
+
+            tokio::spawn(async move {
+                if let Err(e) = conn.await {
+                    error!("{e}");
+                }
+            });
+
+            let rows = match client
+                .query(
+                    "SELECT password FROM auth WHERE username = $1",
+                    &[&username],
+                )
+                .await
+            {
+                Ok(rows) => rows,
+                Err(e) => {
+                    error!("{e}");
+                    return bad_database;
+                }
+            };
+
+            let real_password: &str = if let Some(row) = rows.get(0) {
+                row.get(0)
+            } else {
+                return fail_response;
+            };
+
+            if password != real_password {
+                return fail_response;
+            }
+
+            // Will uuid collide?
+            let token = uuid::Uuid::new_v4().to_string();
+
+            match self
+                .redis_conn
+                .clone()
+                .set_ex(&token, username, 60 * 60 * 24 * 3)
+                .await
+            {
+                Ok(()) => Ok(Response::new(TokenResponse {
+                    status_code: TokenStatusCode::Success.into(),
+                    token,
+                })),
+
+                Err(e) => {
+                    error!("{e}");
+                    return bad_database;
+                }
+            }
+        })
     }
 }
 
 fn main() {
+    env_logger::init();
+
     let redis_client = redis::Client::open(env::var("REDIS_URL").unwrap()).unwrap();
+
+    let mut postgres_config = tokio_postgres::config::Config::new();
+    postgres_config.options(&env::var("POSTGRES_URL").unwrap());
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -91,13 +169,17 @@ fn main() {
             Server::builder()
                 .concurrency_limit_per_connection(256)
                 .tcp_keepalive(Some(Duration::from_secs(10)))
-                .add_service(AuthServiceServer::new(AuthService { redis_conn }))
-                .serve_with_incoming(CombinedIncoming {
-                    a: TcpIncoming::new((Ipv6Addr::UNSPECIFIED, 14514).into(), false, None)
-                        .unwrap(),
-                    b: TcpIncoming::new((Ipv4Addr::UNSPECIFIED, 14514).into(), false, None)
-                        .unwrap(),
-                })
+                .add_service(AuthServiceServer::new(AuthService {
+                    redis_conn,
+                    postgres_config,
+                }))
+                .serve_with_incoming(
+                    CombinedIncoming::new(
+                        (Ipv6Addr::UNSPECIFIED, 14514).into(),
+                        (Ipv4Addr::UNSPECIFIED, 14514).into(),
+                    )
+                    .unwrap(),
+                )
                 .await
                 .unwrap();
         })
