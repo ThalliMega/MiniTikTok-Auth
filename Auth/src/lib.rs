@@ -22,6 +22,10 @@ type DynError = Box<dyn Error + Send + Sync>;
 /// This function will initialize the [env-logger](https://docs.rs/env_logger) and start the server.  
 /// Because this function will be used in integration tests,
 /// it will **NOT** block the main thread.
+/// 
+/// # Panics
+/// 
+/// Panics if called from **outside** of the Tokio runtime.
 pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, DynError> {
     env_logger::init();
 
@@ -46,6 +50,14 @@ pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, DynError> {
             )?)
             .await?;
 
-        Ok::<(), Box<dyn Error + Send + Sync>>(())
+        Ok(())
     }))
+}
+
+/// Build a runtime and block on a `Future`.
+pub fn block_on<F: std::future::Future>(f: F) -> Result<F::Output, std::io::Error> {
+    Ok(tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(f))
 }
