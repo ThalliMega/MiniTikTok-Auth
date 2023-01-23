@@ -1,5 +1,7 @@
 fn main() -> std::io::Result<()> {
-    tonic_build::configure()
-        .build_client(false)
-        .compile(&["proto/auth.proto"], &["proto"])
+    let mut builder = tonic_build::configure();
+    if cfg!(not(test)) {
+        builder = builder.build_client(false);
+    }
+    builder.compile(&["proto/auth.proto"], &["proto"])
 }
