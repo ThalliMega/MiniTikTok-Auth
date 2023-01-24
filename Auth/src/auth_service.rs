@@ -22,6 +22,9 @@ impl auth_service_server::AuthService for AuthService {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
+        let bad_database: Result<Response<AuthResponse>, Status> =
+            Err(Status::internal("Bad Database"));
+
         let req = request.into_inner();
         let user_id = req.user_id;
         let token = req.token;
@@ -48,7 +51,7 @@ impl auth_service_server::AuthService for AuthService {
 
                     Err(e) => {
                         error!("{e}");
-                        return Err(Status::internal("Bad Database"));
+                        return bad_database;
                     }
                 },
             ))
@@ -63,6 +66,9 @@ impl auth_service_server::AuthService for AuthService {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
+        let bad_database: Result<Response<TokenResponse>, Status> =
+            Err(Status::internal("Bad Database"));
+
         let req = request.into_inner();
         let username = req.username;
         let password = req.password;
@@ -71,8 +77,6 @@ impl auth_service_server::AuthService for AuthService {
             status_code: TokenStatusCode::Fail.into(),
             token: String::new(),
         }));
-
-        let bad_database = Err(Status::internal("Bad Database"));
 
         Box::pin(async move {
             let (client, conn) = match self.postgres_config.connect(NoTls).await {
@@ -89,24 +93,27 @@ impl auth_service_server::AuthService for AuthService {
                 }
             });
 
-            let rows = match client
-                .query(
+            let real_password: String = match client
+                .query_opt(
                     "SELECT password FROM auth WHERE username = $1",
                     &[&username],
                 )
                 .await
             {
-                Ok(rows) => rows,
+                Ok(row) => {
+                    if let Some(r) = row {
+                        // TODO: into_err when stable
+                        r.try_get(0).map_err(|_| unsafe {
+                            bad_database.as_ref().unwrap_err_unchecked().clone()
+                        })?
+                    } else {
+                        return fail_response;
+                    }
+                }
                 Err(e) => {
                     error!("{e}");
                     return bad_database;
                 }
-            };
-
-            let real_password: &str = if let Some(row) = rows.get(0) {
-                row.get(0)
-            } else {
-                return fail_response;
             };
 
             if password != real_password {
