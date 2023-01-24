@@ -8,6 +8,8 @@ use std::{future::Future, pin::Pin};
 use tokio_postgres::NoTls;
 use tonic::{Request, Response, Status};
 
+type AsyncWrapper<'a, T> = Pin<Box<dyn Future<Output = Result<Response<T>, Status>> + Send + 'a>>;
+
 pub struct AuthService {
     pub redis_conn: MultiplexedConnection,
     pub postgres_config: tokio_postgres::config::Config,
@@ -17,13 +19,12 @@ impl auth_service_server::AuthService for AuthService {
     fn auth<'life0, 'async_trait>(
         &'life0 self,
         request: Request<AuthRequest>,
-    ) -> Pin<Box<dyn Future<Output = Result<Response<AuthResponse>, Status>> + Send + 'async_trait>>
+    ) -> AsyncWrapper<'async_trait, AuthResponse>
     where
         'life0: 'async_trait,
         Self: 'async_trait,
     {
-        let bad_database: Result<Response<AuthResponse>, Status> =
-            Err(Status::internal("Bad Database"));
+        let bad_database = Err(Status::internal("Bad Database"));
 
         let req = request.into_inner();
         let user_id = req.user_id;
@@ -61,13 +62,12 @@ impl auth_service_server::AuthService for AuthService {
     fn retrive_token<'life0, 'async_trait>(
         &'life0 self,
         request: Request<TokenRequest>,
-    ) -> Pin<Box<dyn Future<Output = Result<Response<TokenResponse>, Status>> + Send + 'async_trait>>
+    ) -> AsyncWrapper<'async_trait, TokenResponse>
     where
         'life0: 'async_trait,
         Self: 'async_trait,
     {
-        let bad_database: Result<Response<TokenResponse>, Status> =
-            Err(Status::internal("Bad Database"));
+        let bad_database = Err(Status::internal("Bad Database"));
 
         let req = request.into_inner();
         let username = req.username;
