@@ -1,5 +1,5 @@
 FROM rust:alpine AS build
-RUN echo "" > Auth/src/main.rs
+RUN mkdir -p Auth/src & touch Auth/src/main.rs
 COPY Cargo.toml ./
 COPY Auth/Cargo.toml Auth/
 RUN cargo vendor
