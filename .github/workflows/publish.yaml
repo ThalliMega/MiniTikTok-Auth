@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-&-push:
+  build-and-push:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
