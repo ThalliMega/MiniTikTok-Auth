@@ -33,7 +33,7 @@ fn auth() {
         assert_eq!(
             channel
                 .auth(AuthRequest {
-                    user_id: "114514".into(),
+                    user_id: 114514,
                     token: "1919810".into(),
                 })
                 .await

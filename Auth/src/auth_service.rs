@@ -31,7 +31,7 @@ impl auth_service_server::AuthService for AuthService {
                 match self
                     .redis_conn
                     .clone()
-                    .get_ex::<String, String>(token, Expiry::EX(60 * 60 * 24 * 3))
+                    .get_ex::<String, u32>(token, Expiry::EX(60 * 60 * 24 * 3))
                     .await
                 {
                     Ok(id) => {
