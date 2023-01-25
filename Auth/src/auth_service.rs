@@ -76,6 +76,7 @@ impl auth_service_server::AuthService for AuthService {
         let fail_response = Ok(Response::new(TokenResponse {
             status_code: TokenStatusCode::Fail.into(),
             token: String::new(),
+            user_id: 0,
         }));
 
         Box::pin(async move {
@@ -93,9 +94,9 @@ impl auth_service_server::AuthService for AuthService {
                 }
             });
 
-            let real_password: String = match client
+            let (real_password, user_id): (String, u32) = match client
                 .query_opt(
-                    "SELECT password FROM auth WHERE username = $1",
+                    "SELECT password, id FROM auth WHERE username = $1",
                     &[&username],
                 )
                 .await
@@ -103,9 +104,16 @@ impl auth_service_server::AuthService for AuthService {
                 Ok(row) => {
                     if let Some(r) = row {
                         // TODO: into_err when stable
-                        r.try_get(0).map_err(|_| unsafe {
-                            bad_database.as_ref().unwrap_err_unchecked().clone()
-                        })?
+                        (
+                            r.try_get(0).map_err(|e| {
+                                error!("{e}");
+                                unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
+                            })?,
+                            r.try_get(1).map_err(|e| {
+                                error!("{e}");
+                                unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
+                            })?,
+                        )
                     } else {
                         return fail_response;
                     }
@@ -132,8 +140,60 @@ impl auth_service_server::AuthService for AuthService {
                 Ok(()) => Ok(Response::new(TokenResponse {
                     status_code: TokenStatusCode::Success.into(),
                     token,
+                    user_id,
                 })),
 
+                Err(e) => {
+                    error!("{e}");
+                    return bad_database;
+                }
+            }
+        })
+    }
+
+    fn retrive_user_id<'life0, 'async_trait>(
+        &'life0 self,
+        request: tonic::Request<prost::alloc::string::String>,
+    ) -> AsyncWrapper<'async_trait, u32>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        let bad_database = Err(Status::internal("Bad Database"));
+
+        Box::pin(async {
+            let (client, conn) = match self.postgres_config.connect(NoTls).await {
+                Ok(val) => val,
+                Err(e) => {
+                    error!("{e}");
+                    return bad_database;
+                }
+            };
+
+            tokio::spawn(async move {
+                if let Err(e) = conn.await {
+                    error!("{e}");
+                }
+            });
+
+            match client
+                .query_opt(
+                    "SELECT id FROM auth WHERE username = $1",
+                    &[&request.into_inner()],
+                )
+                .await
+            {
+                Ok(row) => {
+                    if let Some(r) = row {
+                        // TODO: into_err when stable
+                        Ok(Response::new(r.try_get(0).map_err(|e| {
+                            error!("{e}");
+                            unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
+                        })?))
+                    } else {
+                        return Ok(Response::new(0));
+                    }
+                }
                 Err(e) => {
                     error!("{e}");
                     return bad_database;

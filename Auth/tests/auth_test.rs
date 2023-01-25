@@ -62,7 +62,8 @@ fn retrive_token() {
                 .into_inner(),
             TokenResponse {
                 status_code: TokenStatusCode::Success.into(),
-                token: "1919810".into()
+                token: "1919810".into(),
+                user_id: 114514
             }
         );
     })

@@ -29,6 +29,8 @@ CREATE TABLE `auth` (
 );
 ```
 
+*Note: Id 0 is preserved and used as a user that does not exist.*
+
 ### RUST_LOG
 
 Check the [documention](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) for details.
