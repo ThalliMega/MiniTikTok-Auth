@@ -1,1 +1,1 @@
-tonic::include_proto!("mini_tiktok.auth.proto");
+tonic::include_proto!("mini_tiktok.proto.auth");
