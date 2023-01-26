@@ -3,21 +3,28 @@
 use std::{
     env,
     error::Error,
+    future::Future,
     net::{Ipv4Addr, Ipv6Addr},
+    pin::Pin,
     time::Duration,
 };
 
 use auth_service::AuthService;
 use combind_incoming::CombinedIncoming;
-use proto::auth_service_server::AuthServiceServer;
+use health_check::HealthChecker;
+use proto::{auth_service_server::AuthServiceServer, health_checker_server::HealthCheckerServer};
 use tokio::task::JoinHandle;
-use tonic::transport::Server;
+use tonic::{transport::Server, Response, Status};
 
 mod auth_service;
 mod combind_incoming;
+mod health_check;
+
 pub mod proto;
 
 type DynError = Box<dyn Error + Send + Sync>;
+
+type AsyncWrapper<'a, T> = Pin<Box<dyn Future<Output = Result<Response<T>, Status>> + Send + 'a>>;
 
 /// This function will initialize the [env-logger](https://docs.rs/env_logger) and start the server.  
 /// Because this function will be used in integration tests,
@@ -48,6 +55,7 @@ pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, String> {
                 redis_conn,
                 postgres_config,
             }))
+            .add_service(HealthCheckerServer::new(HealthChecker))
             .serve_with_incoming(CombinedIncoming::new(
                 (Ipv6Addr::UNSPECIFIED, 14514).into(),
                 (Ipv4Addr::UNSPECIFIED, 14514).into(),

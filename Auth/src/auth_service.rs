@@ -1,14 +1,14 @@
-use crate::proto::{
-    auth_response::AuthStatusCode, auth_service_server, token_response::TokenStatusCode,
-    AuthRequest, AuthResponse, TokenRequest, TokenResponse,
+use crate::{
+    proto::{
+        auth_response::AuthStatusCode, auth_service_server, token_response::TokenStatusCode,
+        AuthRequest, AuthResponse, TokenRequest, TokenResponse,
+    },
+    AsyncWrapper,
 };
 use log::error;
 use redis::{aio::MultiplexedConnection, AsyncCommands, Expiry};
-use std::{future::Future, pin::Pin};
 use tokio_postgres::NoTls;
 use tonic::{Request, Response, Status};
-
-type AsyncWrapper<'a, T> = Pin<Box<dyn Future<Output = Result<Response<T>, Status>> + Send + 'a>>;
 
 pub struct AuthService {
     pub redis_conn: MultiplexedConnection,
