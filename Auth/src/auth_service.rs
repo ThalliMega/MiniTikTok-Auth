@@ -27,7 +27,6 @@ impl auth_service_server::AuthService for AuthService {
         let bad_database = Err(Status::internal("Bad Database"));
 
         let req = request.into_inner();
-        let user_id = req.user_id;
         let token = req.token;
 
         Box::pin(async move {
@@ -35,21 +34,17 @@ impl auth_service_server::AuthService for AuthService {
                 match self
                     .redis_conn
                     .clone()
-                    .get_ex::<String, u32>(token, Expiry::EX(60 * 60 * 24 * 3))
+                    .get_ex(&token, Expiry::EX(60 * 60 * 24 * 3))
                     .await
                 {
-                    Ok(id) => {
-                        if id == user_id {
-                            AuthResponse {
-                                status_code: AuthStatusCode::Success.into(),
-                            }
-                        } else {
-                            AuthResponse {
-                                status_code: AuthStatusCode::Fail.into(),
-                            }
-                        }
-                    }
-
+                    Ok(Some(user_id)) => AuthResponse {
+                        status_code: AuthStatusCode::Success.into(),
+                        user_id,
+                    },
+                    Ok(None) => AuthResponse {
+                        status_code: AuthStatusCode::Fail.into(),
+                        user_id: 0,
+                    },
                     Err(e) => {
                         error!("{e}");
                         return bad_database;
@@ -101,23 +96,21 @@ impl auth_service_server::AuthService for AuthService {
                 )
                 .await
             {
-                Ok(row) => {
-                    if let Some(r) = row {
-                        // TODO: into_err when stable
-                        (
-                            r.try_get(0).map_err(|e| {
-                                error!("{e}");
-                                unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
-                            })?,
-                            r.try_get(1).map_err(|e| {
-                                error!("{e}");
-                                unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
-                            })?,
-                        )
-                    } else {
-                        return fail_response;
-                    }
+                Ok(Some(row)) =>
+                // TODO: into_err when stable
+                {
+                    (
+                        row.try_get(0).map_err(|e| {
+                            error!("{e}");
+                            unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
+                        })?,
+                        row.try_get(1).map_err(|e| {
+                            error!("{e}");
+                            unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
+                        })?,
+                    )
                 }
+                Ok(None) => return fail_response,
                 Err(e) => {
                     error!("{e}");
                     return bad_database;
@@ -134,7 +127,7 @@ impl auth_service_server::AuthService for AuthService {
             match self
                 .redis_conn
                 .clone()
-                .set_ex(&token, username, 60 * 60 * 24 * 3)
+                .set_ex(&token, &username, 60 * 60 * 24 * 3)
                 .await
             {
                 Ok(()) => Ok(Response::new(TokenResponse {

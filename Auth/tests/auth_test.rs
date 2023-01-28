@@ -33,14 +33,14 @@ fn auth() {
         assert_eq!(
             channel
                 .auth(AuthRequest {
-                    user_id: 114514,
                     token: "1919810".into(),
                 })
                 .await
                 .unwrap()
                 .into_inner(),
             AuthResponse {
-                status_code: AuthStatusCode::Success.into()
+                status_code: AuthStatusCode::Success.into(),
+                user_id: 114514,
             }
         );
     })
