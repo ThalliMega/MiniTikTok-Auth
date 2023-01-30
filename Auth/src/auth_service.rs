@@ -5,14 +5,14 @@ use crate::{
     },
     AsyncWrapper,
 };
+use bb8_postgres::{bb8, tokio_postgres::NoTls, PostgresConnectionManager};
 use log::error;
 use redis::{aio::MultiplexedConnection, AsyncCommands, Expiry};
-use tokio_postgres::NoTls;
 use tonic::{Request, Response, Status};
 
 pub struct AuthService {
     pub redis_conn: MultiplexedConnection,
-    pub postgres_config: tokio_postgres::config::Config,
+    pub postgres_pool: bb8::Pool<PostgresConnectionManager<NoTls>>,
 }
 
 impl auth_service_server::AuthService for AuthService {
@@ -75,19 +75,13 @@ impl auth_service_server::AuthService for AuthService {
         }));
 
         Box::pin(async move {
-            let (client, conn) = match self.postgres_config.connect(NoTls).await {
+            let client = match self.postgres_pool.get().await {
                 Ok(val) => val,
                 Err(e) => {
                     error!("{e}");
                     return bad_database;
                 }
             };
-
-            tokio::spawn(async move {
-                if let Err(e) = conn.await {
-                    error!("{e}");
-                }
-            });
 
             let (real_password, user_id): (String, u32) = match client
                 .query_opt(

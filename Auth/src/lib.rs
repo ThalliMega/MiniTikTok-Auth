@@ -10,6 +10,11 @@ use std::{
 };
 
 use auth_service::AuthService;
+use bb8_postgres::{
+    bb8,
+    tokio_postgres::{self, NoTls},
+    PostgresConnectionManager,
+};
 use combind_incoming::CombinedIncoming;
 use health_check::HealthChecker;
 use proto::{auth_service_server::AuthServiceServer, health_checker_server::HealthCheckerServer};
@@ -45,15 +50,19 @@ pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, String> {
     postgres_config
         .options(&env::var("POSTGRES_URL").map_err(|_| "POSTGRES_URL doesn't exist.".to_string())?);
 
+    let postgres_manager = PostgresConnectionManager::new(postgres_config, NoTls);
+
     Ok(tokio::spawn(async move {
         let redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
+
+        let postgres_pool = bb8::Pool::builder().build(postgres_manager).await?;
 
         Server::builder()
             .concurrency_limit_per_connection(256)
             .tcp_keepalive(Some(Duration::from_secs(10)))
             .add_service(AuthServiceServer::new(AuthService {
                 redis_conn,
-                postgres_config,
+                postgres_pool,
             }))
             .add_service(HealthCheckerServer::new(HealthChecker))
             .serve_with_incoming(CombinedIncoming::new(
