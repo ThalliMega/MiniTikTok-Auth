@@ -1,4 +1,4 @@
-FROM rust:alpine AS build
+FROM rust:alpine3.17 AS build
 WORKDIR /src
 ARG REPLACE_ALPINE=""
 RUN mkdir -p Auth/src \
@@ -13,7 +13,7 @@ RUN cargo vendor --respect-source-config
 COPY ./ ./
 RUN cargo build --release --frozen --bins
 
-FROM alpine
+FROM alpine:3.17
 WORKDIR /app
 COPY --from=build /src/target/release/mini_tiktok_auth ./auth
 ENTRYPOINT [ "./auth" ]

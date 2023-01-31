@@ -132,7 +132,7 @@ impl auth_service_server::AuthService for AuthService {
 
                 Err(e) => {
                     error!("{e}");
-                    return bad_database;
+                    bad_database
                 }
             }
         })

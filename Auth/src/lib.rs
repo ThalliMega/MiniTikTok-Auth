@@ -16,14 +16,13 @@ use bb8_postgres::{
     PostgresConnectionManager,
 };
 use combind_incoming::CombinedIncoming;
-use health_check::HealthChecker;
-use proto::{auth_service_server::AuthServiceServer, health_checker_server::HealthCheckerServer};
+use proto::auth_service_server::AuthServiceServer;
 use tokio::task::JoinHandle;
 use tonic::{transport::Server, Response, Status};
+use tonic_health::server::health_reporter;
 
 mod auth_service;
 mod combind_incoming;
-mod health_check;
 
 pub mod proto;
 
@@ -52,10 +51,16 @@ pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, String> {
 
     let postgres_manager = PostgresConnectionManager::new(postgres_config, NoTls);
 
+    let (mut health_reporter, health_service) = health_reporter();
+
     Ok(tokio::spawn(async move {
         let redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
 
         let postgres_pool = bb8::Pool::builder().build(postgres_manager).await?;
+
+        health_reporter
+            .set_serving::<AuthServiceServer<AuthService>>()
+            .await;
 
         Server::builder()
             .concurrency_limit_per_connection(256)
@@ -64,7 +69,7 @@ pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, String> {
                 redis_conn,
                 postgres_pool,
             }))
-            .add_service(HealthCheckerServer::new(HealthChecker))
+            .add_service(health_service)
             .serve_with_incoming(CombinedIncoming::new(
                 (Ipv6Addr::UNSPECIFIED, 14514).into(),
                 (Ipv4Addr::UNSPECIFIED, 14514).into(),
