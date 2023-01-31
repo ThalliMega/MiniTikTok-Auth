@@ -4,7 +4,7 @@ metadata:
     name: bawling-minidouyin-auth-grpc
     namespace: bawling-minidouyin-auth-grpc
 spec:
-    ports: // 自己写吧
+    ports: # 自己写吧
         -   name: grpc
             port: 8080
             protocol: TCP
