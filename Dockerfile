@@ -22,3 +22,5 @@ COPY --from=build /src/target/release/mini_tiktok_auth ./auth
 ENTRYPOINT [ "./auth" ]
 
 EXPOSE 14514
+
+HEALTHCHECK CMD /bin/grpc_health_probe -addr=:14514 || exit 1
