@@ -5,7 +5,7 @@ metadata:
         consul.hashicorp.com/service-name: bawling-minidouyin-auth
         consul.hashicorp.com/service-port: grpc
         consul.hashicorp.com/service-sync: 'true'
-        consul.hashicorp.com/service-tags: 'dream,grpc,forest,forestsay'
+        consul.hashicorp.com/service-tags: 'grpc,minitiktok,14514'
     labels:
         app: bawling-minidouyin-auth
     name: bawling-minidouyin-auth
