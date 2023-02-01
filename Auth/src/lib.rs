@@ -70,10 +70,14 @@ pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, String> {
                 postgres_pool,
             }))
             .add_service(health_service)
-            .serve_with_incoming(CombinedIncoming::new(
-                (Ipv6Addr::UNSPECIFIED, 14514).into(),
-                (Ipv4Addr::UNSPECIFIED, 14514).into(),
-            )?)
+            .serve_with_incoming_shutdown(
+                CombinedIncoming::new(
+                    (Ipv6Addr::UNSPECIFIED, 14514).into(),
+                    (Ipv4Addr::UNSPECIFIED, 14514).into(),
+                )?,
+                // TODO?: unwrap
+                async { tokio::signal::ctrl_c().await.unwrap() },
+            )
             .await?;
 
         Ok(())
