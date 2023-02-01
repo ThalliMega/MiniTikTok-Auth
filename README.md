@@ -22,8 +22,8 @@ Check the [documention](https://docs.rs/tokio-postgres/latest/tokio_postgres/con
 ```sql
 CREATE TABLE `auth` (
 	`id` INT unsigned AUTO_INCREMENT,
-	`username` VARCHAR(20) NOT NULL,
-	`password` VARCHAR(20) NOT NULL,
+	`username` VARCHAR(32) NOT NULL,
+	`password` VARCHAR(32) NOT NULL,
 	UNIQUE KEY `username_idx` (`username`) USING HASH,
 	PRIMARY KEY (`id`)
 );
