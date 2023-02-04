@@ -1,13 +1,6 @@
 //! For integration tests.
 
-use std::{
-    env,
-    error::Error,
-    future::Future,
-    net::{Ipv4Addr, Ipv6Addr},
-    pin::Pin,
-    time::Duration,
-};
+use std::{env, error::Error, future::Future, net::Ipv6Addr, pin::Pin, time::Duration};
 
 use auth_service::AuthService;
 use bb8_postgres::{
@@ -15,13 +8,11 @@ use bb8_postgres::{
     tokio_postgres::{self, NoTls},
     PostgresConnectionManager,
 };
-use combind_incoming::CombinedIncoming;
 use proto::auth_service_server::AuthServiceServer;
 use tonic::{transport::Server, Response, Status};
 use tonic_health::server::health_reporter;
 
 mod auth_service;
-mod combind_incoming;
 
 pub mod proto;
 
@@ -68,11 +59,8 @@ pub async fn start_up() -> Result<(), DynError> {
             postgres_pool,
         }))
         .add_service(health_service)
-        .serve_with_incoming_shutdown(
-            CombinedIncoming::new(
-                (Ipv6Addr::UNSPECIFIED, 14514).into(),
-                (Ipv4Addr::UNSPECIFIED, 14514).into(),
-            )?,
+        .serve_with_shutdown(
+            (Ipv6Addr::UNSPECIFIED, 14514).into(),
             // TODO?: unwrap
             async { tokio::signal::ctrl_c().await.unwrap() },
         )
