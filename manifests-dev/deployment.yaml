@@ -4,7 +4,7 @@ metadata:
     annotations:
         sidecar.jaegertracing.io/inject: 'true'
     labels:
-        app: paraparty-xiaobin
+        app: bawling-minidouyin-auth
     name: bawling-minidouyin-auth
     namespace: bawling-minidouyin-auth
 spec:
