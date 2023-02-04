@@ -17,7 +17,6 @@ use bb8_postgres::{
 };
 use combind_incoming::CombinedIncoming;
 use proto::auth_service_server::AuthServiceServer;
-use tokio::task::JoinHandle;
 use tonic::{transport::Server, Response, Status};
 use tonic_health::server::health_reporter;
 
@@ -37,7 +36,7 @@ type AsyncWrapper<'a, T> = Pin<Box<dyn Future<Output = Result<Response<T>, Statu
 /// # Panics
 ///
 /// Panics if called from **outside** of the Tokio runtime.
-pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, String> {
+pub async fn start_up() -> Result<(), DynError> {
     env_logger::init();
 
     let redis_client = redis::Client::open(
@@ -53,35 +52,33 @@ pub fn start_up() -> Result<JoinHandle<Result<(), DynError>>, String> {
 
     let (mut health_reporter, health_service) = health_reporter();
 
-    Ok(tokio::spawn(async move {
-        let redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
+    let redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
 
-        let postgres_pool = bb8::Pool::builder().build(postgres_manager).await?;
+    let postgres_pool = bb8::Pool::builder().build(postgres_manager).await?;
 
-        health_reporter
-            .set_serving::<AuthServiceServer<AuthService>>()
-            .await;
+    health_reporter
+        .set_serving::<AuthServiceServer<AuthService>>()
+        .await;
 
-        Server::builder()
-            .concurrency_limit_per_connection(256)
-            .tcp_keepalive(Some(Duration::from_secs(10)))
-            .add_service(AuthServiceServer::new(AuthService {
-                redis_conn,
-                postgres_pool,
-            }))
-            .add_service(health_service)
-            .serve_with_incoming_shutdown(
-                CombinedIncoming::new(
-                    (Ipv6Addr::UNSPECIFIED, 14514).into(),
-                    (Ipv4Addr::UNSPECIFIED, 14514).into(),
-                )?,
-                // TODO?: unwrap
-                async { tokio::signal::ctrl_c().await.unwrap() },
-            )
-            .await?;
+    Server::builder()
+        .concurrency_limit_per_connection(256)
+        .tcp_keepalive(Some(Duration::from_secs(10)))
+        .add_service(AuthServiceServer::new(AuthService {
+            redis_conn,
+            postgres_pool,
+        }))
+        .add_service(health_service)
+        .serve_with_incoming_shutdown(
+            CombinedIncoming::new(
+                (Ipv6Addr::UNSPECIFIED, 14514).into(),
+                (Ipv4Addr::UNSPECIFIED, 14514).into(),
+            )?,
+            // TODO?: unwrap
+            async { tokio::signal::ctrl_c().await.unwrap() },
+        )
+        .await?;
 
-        Ok(())
-    }))
+    Ok(())
 }
 
 /// Build a runtime and block on a `Future`.

@@ -10,7 +10,7 @@ use tonic::transport::Channel;
 
 fn wrapper(f: impl std::future::Future<Output = ()>) {
     block_on(async {
-        let handle = start_up().unwrap();
+        let handle = start_up();
 
         f.await;
 
