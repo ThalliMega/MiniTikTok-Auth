@@ -30,14 +30,13 @@ type AsyncWrapper<'a, T> = Pin<Box<dyn Future<Output = Result<Response<T>, Statu
 pub async fn start_up() -> Result<(), DynError> {
     env_logger::init();
 
-    let redis_client = redis::Client::open(
-        env::var("REDIS_URL").map_err(|_| "REDIS_URL doesn't exist.".to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    let redis_client =
+        redis::Client::open(env::var("REDIS_URL").map_err(|_| "REDIS_URL doesn't exist.")?)
+            .map_err(|e| e.to_string())?;
 
-    let mut postgres_config = tokio_postgres::config::Config::new();
-    postgres_config
-        .options(&env::var("POSTGRES_URL").map_err(|_| "POSTGRES_URL doesn't exist.".to_string())?);
+    let postgres_config = env::var("POSTGRES_URL")
+        .map_err(|_| "POSTGRES_URL doesn't exist.")?
+        .parse()?;
 
     let postgres_manager = PostgresConnectionManager::new(postgres_config, NoTls);
 
