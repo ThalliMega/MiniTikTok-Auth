@@ -3,11 +3,7 @@
 use std::{env, error::Error, future::Future, net::Ipv6Addr, pin::Pin, time::Duration};
 
 use auth_service::AuthService;
-use bb8_postgres::{
-    bb8,
-    tokio_postgres::{self, NoTls},
-    PostgresConnectionManager,
-};
+use bb8_postgres::{bb8, tokio_postgres::NoTls, PostgresConnectionManager};
 use proto::auth_service_server::AuthServiceServer;
 use tonic::{transport::Server, Response, Status};
 use tonic_health::server::health_reporter;
