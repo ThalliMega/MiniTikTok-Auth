@@ -5,8 +5,9 @@ use crate::{
     },
     AsyncWrapper,
 };
+use argon2::{password_hash, Argon2, PasswordHash, PasswordVerifier};
 use bb8_postgres::{bb8, tokio_postgres::NoTls, PostgresConnectionManager};
-use log::error;
+use log::{error, info};
 use redis::{aio::MultiplexedConnection, AsyncCommands, Expiry};
 use tonic::{Request, Response, Status};
 
@@ -62,11 +63,12 @@ impl auth_service_server::AuthService for AuthService {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
-        let bad_database = Err(Status::internal("Bad Database"));
+        let bad_database_status = Status::internal("Bad Database");
+        let bad_database = Err(bad_database_status.clone());
 
         let req = request.into_inner();
         let username = req.username;
-        let password_hash = req.password_hash;
+        let password = req.password;
 
         let fail_response = Ok(Response::new(TokenResponse {
             status_code: TokenStatusCode::Fail.into(),
@@ -83,7 +85,7 @@ impl auth_service_server::AuthService for AuthService {
                 }
             };
 
-            let (real_password, user_id): (String, i64) = match client
+            let (password_hash, user_id): (String, i64) = match client
                 .query_opt(
                     "SELECT password, id FROM auth WHERE username = $1",
                     &[&username],
@@ -96,11 +98,11 @@ impl auth_service_server::AuthService for AuthService {
                     (
                         row.try_get(0).map_err(|e| {
                             error!("{e}");
-                            unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
+                            bad_database_status.clone()
                         })?,
                         row.try_get(1).map_err(|e| {
                             error!("{e}");
-                            unsafe { bad_database.as_ref().unwrap_err_unchecked().clone() }
+                            bad_database_status.clone()
                         })?,
                     )
                 }
@@ -111,11 +113,24 @@ impl auth_service_server::AuthService for AuthService {
                 }
             };
 
-            if password_hash != real_password {
+            let parsed_hash = PasswordHash::new(&password_hash).map_err(|e| {
+                error!("parse password hash failed: {e}");
+                bad_database_status
+            })?;
+
+            if let Err(e) = Argon2::default().verify_password(password.as_bytes(), &parsed_hash) {
+                match e {
+                    password_hash::Error::Password => {
+                        info!("someone try to login {user_id} with wrong password")
+                    }
+                    _ => {
+                        error!("hash verification failed: {e}")
+                    }
+                }
                 return fail_response;
             }
 
-            // Will uuid collide?
+            // TODO: Will uuid collide?
             let token = uuid::Uuid::new_v4().to_string();
 
             match self

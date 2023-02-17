@@ -23,7 +23,7 @@ Check the [documention](https://docs.rs/tokio-postgres/latest/tokio_postgres/con
 CREATE TABLE "auth" (
     "id" BIGSERIAL,
     "username" VARCHAR(32) NOT NULL,
-    "password" CHAR(32) NOT NULL,
+    "password" CHAR(96) NOT NULL,
     UNIQUE ("username"),
     PRIMARY KEY ("id")
 );
