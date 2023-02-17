@@ -4,7 +4,9 @@ use std::{env, error::Error, future::Future, net::Ipv6Addr, pin::Pin, time::Dura
 
 use auth_service::AuthService;
 use bb8_postgres::{bb8, tokio_postgres::NoTls, PostgresConnectionManager};
+use log::{info, warn};
 use proto::auth_service_server::AuthServiceServer;
+use tokio::signal::unix::{signal, SignalKind};
 use tonic::{transport::Server, Response, Status};
 use tonic_health::server::health_reporter;
 
@@ -46,6 +48,8 @@ pub async fn start_up() -> Result<(), DynError> {
         .set_serving::<AuthServiceServer<AuthService>>()
         .await;
 
+    let mut sigterm = signal(SignalKind::terminate())?;
+
     Server::builder()
         .concurrency_limit_per_connection(256)
         .tcp_keepalive(Some(Duration::from_secs(10)))
@@ -54,11 +58,12 @@ pub async fn start_up() -> Result<(), DynError> {
             postgres_pool,
         }))
         .add_service(health_service)
-        .serve_with_shutdown(
-            (Ipv6Addr::UNSPECIFIED, 14514).into(),
-            // TODO?: unwrap
-            async { tokio::signal::ctrl_c().await.unwrap() },
-        )
+        .serve_with_shutdown((Ipv6Addr::UNSPECIFIED, 14514).into(), async {
+            match sigterm.recv().await {
+                Some(()) => info!("start graceful shutdown"),
+                None => warn!("stream of SIGTERM closed"),
+            }
+        })
         .await?;
 
     Ok(())

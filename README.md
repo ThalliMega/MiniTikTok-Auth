@@ -20,12 +20,12 @@ Check the [documention](https://docs.rs/tokio-postgres/latest/tokio_postgres/con
 #### postgres table layouts
 
 ```sql
-CREATE TABLE 'auth' (
-	'id' SERIAL,
-	'username' VARCHAR(32) NOT NULL,
-	'password' VARCHAR(32) NOT NULL,
-	UNIQUE ('username'),
-	PRIMARY KEY ('id')
+CREATE TABLE "auth" (
+    "id" SERIAL,
+    "username" VARCHAR(32) NOT NULL,
+    "password" VARCHAR(32) NOT NULL,
+    UNIQUE ("username"),
+    PRIMARY KEY ("id")
 );
 ```
 
