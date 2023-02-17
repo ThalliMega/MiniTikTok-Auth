@@ -66,7 +66,7 @@ impl auth_service_server::AuthService for AuthService {
 
         let req = request.into_inner();
         let username = req.username;
-        let password = req.password;
+        let password_hash = req.password_hash;
 
         let fail_response = Ok(Response::new(TokenResponse {
             status_code: TokenStatusCode::Fail.into(),
@@ -111,7 +111,7 @@ impl auth_service_server::AuthService for AuthService {
                 }
             };
 
-            if password != real_password {
+            if password_hash != real_password {
                 return fail_response;
             }
 
