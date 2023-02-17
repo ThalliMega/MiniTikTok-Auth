@@ -21,7 +21,7 @@ Check the [documention](https://docs.rs/tokio-postgres/latest/tokio_postgres/con
 
 ```sql
 CREATE TABLE "auth" (
-    "id" SERIAL,
+    "id" BIGSERIAL,
     "username" VARCHAR(32) NOT NULL,
     "password" VARCHAR(32) NOT NULL,
     UNIQUE ("username"),

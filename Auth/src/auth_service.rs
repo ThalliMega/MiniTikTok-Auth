@@ -83,7 +83,7 @@ impl auth_service_server::AuthService for AuthService {
                 }
             };
 
-            let (real_password, user_id): (String, u32) = match client
+            let (real_password, user_id): (String, i64) = match client
                 .query_opt(
                     "SELECT password, id FROM auth WHERE username = $1",
                     &[&username],
