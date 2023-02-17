@@ -121,7 +121,7 @@ impl auth_service_server::AuthService for AuthService {
             match self
                 .redis_conn
                 .clone()
-                .set_ex(&token, &username, 60 * 60 * 24 * 3)
+                .set_ex(&token, &user_id, 60 * 60 * 24 * 3)
                 .await
             {
                 Ok(()) => Ok(Response::new(TokenResponse {
