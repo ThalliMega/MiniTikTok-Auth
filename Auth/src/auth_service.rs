@@ -92,20 +92,16 @@ impl auth_service_server::AuthService for AuthService {
                 )
                 .await
             {
-                Ok(Some(row)) =>
-                // TODO: into_err when stable
-                {
-                    (
-                        row.try_get(0).map_err(|e| {
-                            error!("{e}");
-                            bad_database_status.clone()
-                        })?,
-                        row.try_get(1).map_err(|e| {
-                            error!("{e}");
-                            bad_database_status.clone()
-                        })?,
-                    )
-                }
+                Ok(Some(row)) => (
+                    row.try_get(0).map_err(|e| {
+                        error!("{e}");
+                        bad_database_status.clone()
+                    })?,
+                    row.try_get(1).map_err(|e| {
+                        error!("{e}");
+                        bad_database_status.clone()
+                    })?,
+                ),
                 Ok(None) => return fail_response,
                 Err(e) => {
                     error!("{e}");
