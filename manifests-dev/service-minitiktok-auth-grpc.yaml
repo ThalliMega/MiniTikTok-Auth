@@ -2,14 +2,14 @@ apiVersion: v1
 kind: Service
 metadata:
     annotations:
-        consul.hashicorp.com/service-name: bawling-minidouyin-auth
+        consul.hashicorp.com/service-name: minitiktok-auth-grpc
         consul.hashicorp.com/service-port: grpc
         consul.hashicorp.com/service-sync: 'true'
         consul.hashicorp.com/service-tags: 'grpc,minitiktok,14514'
     labels:
-        app: bawling-minidouyin-auth
-    name: bawling-minidouyin-auth
-    namespace: bawling-minidouyin-auth
+        app: minitiktok-auth-grpc
+    name: minitiktok-auth-grpc
+    namespace: minitiktok-auth-grpc
 spec:
     ports:
         -   name: grpc
@@ -17,6 +17,6 @@ spec:
             protocol: TCP
             targetPort: 14514
     selector:
-        name: bawling-minidouyin-auth
+        name: minitiktok-auth-grpc
         branch: dev
     type: ClusterIP

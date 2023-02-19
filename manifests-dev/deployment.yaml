@@ -4,29 +4,29 @@ metadata:
     annotations:
         sidecar.jaegertracing.io/inject: 'true'
     labels:
-        app: bawling-minidouyin-auth
-    name: bawling-minidouyin-auth
-    namespace: bawling-minidouyin-auth
+        app: minitiktok-auth-grpc
+    name: minitiktok-auth-grpc
+    namespace: minitiktok-auth-grpc
 spec:
     selector:
         matchLabels:
-            name: bawling-minidouyin-auth
+            name: minitiktok-auth-grpc
     template:
         metadata:
             labels:
-                app: bawling-minidouyin-auth
+                app: minitiktok-auth-grpc
                 branch: dev
                 version: ${BUILD_NUMBER}-${CI_COMMIT_ID}
-                name: bawling-minidouyin-auth
-                dream-app: bawling-minidouyin-auth
-                dream-unit: bawling-minidouyin-auth
+                name: minitiktok-auth-grpc
+                dream-app: minitiktok-auth-grpc
+                dream-unit: minitiktok-auth-grpc
         spec:
             imagePullSecrets:
                 -   name: regcred
             containers:
                 -   image: ${IMAGE}
                     imagePullPolicy: IfNotPresent
-                    name: bawling-minidouyin-auth
+                    name: minitiktok-auth-grpc
                     readinessProbe:
                         exec:
                             command: ["/bin/grpc_health_probe", "-addr=:14514"]
