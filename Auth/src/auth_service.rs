@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     proto::{
         auth_response::AuthStatusCode, auth_service_server, token_response::TokenStatusCode,
@@ -6,14 +8,14 @@ use crate::{
     AsyncWrapper,
 };
 use argon2::{password_hash, Argon2, PasswordHash, PasswordVerifier};
-use bb8_postgres::{bb8, tokio_postgres::NoTls, PostgresConnectionManager};
-use log::{error, info};
+use bb8_bolt::{bb8::Pool, bolt_client, bolt_proto};
+use log::{error, info, warn};
 use redis::{aio::MultiplexedConnection, AsyncCommands, Expiry};
 use tonic::{Request, Response, Status};
 
 pub struct AuthService {
     pub redis_conn: MultiplexedConnection,
-    pub postgres_pool: bb8::Pool<PostgresConnectionManager<NoTls>>,
+    pub bolt_pool: Pool<bb8_bolt::Manager>,
 }
 
 impl auth_service_server::AuthService for AuthService {
@@ -77,39 +79,41 @@ impl auth_service_server::AuthService for AuthService {
         }));
 
         Box::pin(async move {
-            let client = match self.postgres_pool.get().await {
-                Ok(val) => val,
-                Err(e) => {
-                    error!("{e}");
-                    return bad_database;
+            let mut client = map_bad_db_and_log(self.bolt_pool.get().await)?;
+
+            transform_result(
+                client
+                    .run(
+                        "MATCH (u:User { username: $username }) RETURN u.password_hash, u.id;",
+                        Some([("username", username)].into_iter().collect()),
+                        None,
+                    )
+                    .await,
+            )?;
+
+            let records =
+                transform_records(client.pull(Some([("n", -1)].into_iter().collect())).await)?;
+
+            let record = match records.get(0) {
+                Some(r) => r.fields(),
+                None => {
+                    return Ok(Response::new(TokenResponse {
+                        status_code: TokenStatusCode::Fail.into(),
+                        ..Default::default()
+                    }))
                 }
             };
 
-            let (password_hash, user_id): (String, i64) = match client
-                .query_opt(
-                    "SELECT password, id FROM auth WHERE username = $1",
-                    &[&username],
-                )
-                .await
-            {
-                Ok(Some(row)) => (
-                    row.try_get(0).map_err(|e| {
-                        error!("{e}");
-                        bad_database_status.clone()
-                    })?,
-                    row.try_get(1).map_err(|e| {
-                        error!("{e}");
-                        bad_database_status.clone()
-                    })?,
-                ),
-                Ok(None) => return fail_response,
-                Err(e) => {
-                    error!("{e}");
-                    return bad_database;
-                }
+            let passhash = match record.get(0) {
+                Some(bolt_proto::Value::String(s)) => s.as_str(),
+                _ => return bad_database,
+            };
+            let user_id = match record.get(1) {
+                Some(bolt_proto::Value::Integer(i)) => *i,
+                _ => return bad_database,
             };
 
-            let parsed_hash = PasswordHash::new(&password_hash).map_err(|e| {
+            let parsed_hash = PasswordHash::new(passhash).map_err(|e| {
                 error!("parse password hash failed: {e}");
                 bad_database_status
             })?;
@@ -148,4 +152,46 @@ impl auth_service_server::AuthService for AuthService {
             }
         })
     }
+}
+
+fn transform_result(
+    r: Result<bolt_proto::Message, bolt_client::error::CommunicationError>,
+) -> Result<(), Status> {
+    match r {
+        Ok(bolt_proto::Message::Success(_)) => Ok(()),
+        Ok(res) => {
+            warn!("{res:?}");
+            return Err(Status::internal("Bad Database"));
+        }
+        Err(e) => {
+            error!("{e}");
+            return Err(Status::internal("Bad Database"));
+        }
+    }
+}
+
+fn transform_records(
+    r: Result<
+        (Vec<bolt_proto::message::Record>, bolt_proto::Message),
+        bolt_client::error::CommunicationError,
+    >,
+) -> Result<Vec<bolt_proto::message::Record>, Status> {
+    match r {
+        Ok((rec, bolt_proto::Message::Success(_))) => Ok(rec),
+        Ok((_, res)) => {
+            warn!("{res:?}");
+            return Err(Status::internal("Bad Database"));
+        }
+        Err(e) => {
+            error!("{e}");
+            return Err(Status::internal("Bad Database"));
+        }
+    }
+}
+
+fn map_bad_db_and_log<O, E: Display>(res: Result<O, E>) -> Result<O, Status> {
+    res.map_err(|e| {
+        error!("{e}");
+        Status::internal("Bad Database")
+    })
 }

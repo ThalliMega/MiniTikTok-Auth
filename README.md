@@ -13,23 +13,22 @@ Server listens on `[::]:14514`.
 The URL format is `redis://[<username>][:<password>@]<hostname>[:port][/<db>]`.  
 Check the [documention](https://docs.rs/redis/latest/redis/#connection-parameters) for details.
 
-### POSTGRES_URL
+### BOLT_URL
 
-Check the [documention](https://docs.rs/tokio-postgres/latest/tokio_postgres/config/struct.Config.html) for details.
+The address of the graph database.
 
-#### postgres table layouts
+### BOLT_DOMAIN
 
-```sql
-CREATE TABLE "auth" (
-    "id" BIGSERIAL,
-    "username" VARCHAR(32) NOT NULL,
-    "password" CHAR(96) NOT NULL,
-    UNIQUE ("username"),
-    PRIMARY KEY ("id")
-);
-```
+This env var is optional.
+If set, TLS negotiation will be attempted.
 
-*Note: Id 0 is preserved and used as a user that does not exist.*
+### BOLT_USERNAME
+
+The username of the graph database.
+
+### BOLT_PASSWORD
+
+The password of the graph database.
 
 ### RUST_LOG
 

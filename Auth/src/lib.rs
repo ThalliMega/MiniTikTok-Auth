@@ -3,7 +3,10 @@
 use std::{env, error::Error, future::Future, net::Ipv6Addr, pin::Pin, time::Duration};
 
 use auth_service::AuthService;
-use bb8_postgres::{bb8, tokio_postgres::NoTls, PostgresConnectionManager};
+use bb8_bolt::{
+    bb8,
+    bolt_proto::version::{V4_2, V4_3},
+};
 use log::{info, warn};
 use proto::auth_service_server::AuthServiceServer;
 use tokio::signal::unix::{signal, SignalKind};
@@ -32,17 +35,41 @@ pub async fn start_up() -> Result<(), DynError> {
         redis::Client::open(env::var("REDIS_URL").map_err(|_| "REDIS_URL doesn't exist.")?)
             .map_err(|e| e.to_string())?;
 
-    let postgres_config = env::var("POSTGRES_URL")
-        .map_err(|_| "POSTGRES_URL doesn't exist.")?
-        .parse()?;
+    let bolt_metadata: bb8_bolt::bolt_client::Metadata = [
+        ("user_agent", "MiniTikTok-User/0"),
+        ("scheme", "basic"),
+        (
+            "principal",
+            // TODO: String::leak
+            Box::leak(
+                env::var("BOLT_USERNAME")
+                    .map_err(|_| "BOLT_USERNAME doesn't exist.")?
+                    .into_boxed_str(),
+            ),
+        ),
+        (
+            "credentials",
+            // TODO: String::leak
+            Box::leak(
+                env::var("BOLT_PASSWORD")
+                    .map_err(|_| "BOLT_PASSWORD doesn't exist.")?
+                    .into_boxed_str(),
+            ),
+        ),
+    ]
+    .into_iter()
+    .collect();
 
-    let postgres_manager = PostgresConnectionManager::new(postgres_config, NoTls);
+    let bolt_url = env::var("BOLT_URL").map_err(|_| "BOLT_URL doesn't exist.")?;
+
+    let bolt_domain = env::var("BOLT_DOMAIN").ok();
 
     let (mut health_reporter, health_service) = health_reporter();
 
-    let redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
+    let bolt_manager =
+        bb8_bolt::Manager::new(bolt_url, bolt_domain, [V4_3, V4_2, 0, 0], bolt_metadata).await?;
 
-    let postgres_pool = bb8::Pool::builder().build(postgres_manager).await?;
+    let redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
 
     health_reporter
         .set_serving::<AuthServiceServer<AuthService>>()
@@ -55,7 +82,7 @@ pub async fn start_up() -> Result<(), DynError> {
         .tcp_keepalive(Some(Duration::from_secs(10)))
         .add_service(AuthServiceServer::new(AuthService {
             redis_conn,
-            postgres_pool,
+            bolt_pool: bb8::Pool::builder().build(bolt_manager).await?,
         }))
         .add_service(health_service)
         .serve_with_shutdown((Ipv6Addr::UNSPECIFIED, 14514).into(), async {

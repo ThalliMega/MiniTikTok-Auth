@@ -1,5 +1,5 @@
 [submodule "proto"]
 	path = Auth/proto
-	url = git@github.com:ThalliMega/MiniTikTok-Proto.git
+	url = https://github.com/ThalliMega/MiniTikTok-Proto.git
 	branch = main
 	shallow = true
